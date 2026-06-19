@@ -1,0 +1,11 @@
+{
+  "name": "@opengoo/core",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "firebase": "^12.15.0"
+  }
+}

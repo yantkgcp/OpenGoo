@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Match any document in the quizzes collection (saved quiz sets)
+    match /quizzes/{quizId} {
+      allow read, write: if true;
+    }
+    
+    // Match any document in the sessions collection (active game rooms)
+    match /sessions/{pin} {
+      allow read, write: if true;
+      
+      // Match any document in the answers subcollection (submitted player choices)
+      match /answers/{playerId} {
+        allow read, write: if true;
+      }
+    }
+    
+  }
+}
