@@ -111,7 +111,36 @@ else
     echo "The build will proceed with default local configurations (BroadcastChannel fallback offline sync)."
 fi
 
-# 5. Build the Docker image using Google Cloud Build
+# 5. Verify GCS permissions for Cloud Build / Compute Engine default service account
+echo -e "\n${YELLOW}Verifying Cloud Build & Compute service account permissions...${NC}"
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)" 2>/dev/null || true)
+if [ -n "$PROJECT_NUMBER" ]; then
+    COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+    echo -e "Default Compute Service Account: ${BLUE}${COMPUTE_SA}${NC}"
+    
+    # Check if the service account has storage permissions
+    # We query the IAM policy. Since get-iam-policy might be restricted, we wrap it in a silent check
+    IAM_POLICY=$(gcloud projects get-iam-policy "$PROJECT_ID" \
+        --filter="bindings.members:$COMPUTE_SA" \
+        --format="value(bindings.role)" 2>/dev/null || true)
+    
+    if [ -n "$IAM_POLICY" ]; then
+        if echo "$IAM_POLICY" | grep -qE "roles/editor|roles/owner|roles/storage.admin|roles/storage.objectAdmin"; then
+            echo -e "${GREEN}✓ Service account has sufficient Storage permissions.${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Warning: Service account ${COMPUTE_SA} does not appear to have Storage Admin or Editor roles in the IAM policy.${NC}"
+            echo -e "If Cloud Build fails, run the following command to grant permissions:"
+            echo -e "  ${BLUE}gcloud projects add-iam-policy-binding ${PROJECT_ID} --member=\"serviceAccount:${COMPUTE_SA}\" --role=\"roles/storage.admin\"${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Could not verify IAM policy (insufficient permissions to read project IAM policy).${NC}"
+        echo -e "Please ensure ${COMPUTE_SA} has at least 'Storage Admin' or 'Editor' permissions on the project if builds fail.${NC}"
+    fi
+else
+    echo -e "${YELLOW}Could not retrieve project number. Skipping automated IAM check.${NC}"
+fi
+
+# 6. Build the Docker image using Google Cloud Build
 echo -e "\n${YELLOW}Submitting build to Google Cloud Build (Teacher app)...${NC}"
 echo -e "Image tag: ${BLUE}${IMAGE_TAG}${NC}"
 
@@ -119,7 +148,7 @@ gcloud builds submit --config=cloudbuild-teacher.yaml --substitutions="${SUB_LIS
 
 echo -e "${GREEN}✓ Cloud Build finished successfully!${NC}"
 
-# 6. Deploy to Google Cloud Run with IAP Enabled
+# 7. Deploy to Google Cloud Run with IAP Enabled
 echo -e "\n${YELLOW}Deploying container to Google Cloud Run...${NC}"
 echo -e "Service: ${BLUE}${SERVICE_NAME}${NC} in region: ${BLUE}${REGION}${NC}"
 echo -e "Security constraint: ${RED}Private IAP (No public unauthenticated access)${NC}"
@@ -131,13 +160,13 @@ gcloud run deploy "${SERVICE_NAME}" \
     --region "${REGION}" \
     --no-allow-unauthenticated
 
-# 7. Enable Identity-Aware Proxy (IAP) directly on Cloud Run service
+# 8. Enable Identity-Aware Proxy (IAP) directly on Cloud Run service
 echo -e "\n${YELLOW}Activating Google Cloud Identity-Aware Proxy (IAP) protection...${NC}"
 gcloud run services update "${SERVICE_NAME}" \
     --region "${REGION}" \
     --iap
 
-# 8. Retrieve Service URL
+# 9. Retrieve Service URL
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --platform managed --region "${REGION}" --format 'value(status.url)' 2>/dev/null || true)
 
 echo -e "\n${GREEN}====================================================${NC}"

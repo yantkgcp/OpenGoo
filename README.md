@@ -264,6 +264,44 @@ gcloud projects add-iam-policy-binding your-project-id \
 4. Enter the Google account or Workspace Group (e.g. `gcp-developers@example.com`).
 5. Assign the role: **`IAP-secured Web App User`** (`roles/iap.httpsResourceAccessor`).
 
+## 🤖 Headless & CI/CD Environments
+
+In automated environments (such as GitHub Actions, GitLab CI, Cloud Build, or AI coding assistants), interactive authentication is not possible. OpenGoo! fully supports standard, non-interactive Google Cloud and Firebase authentication:
+
+### 1. Headless Authentication
+To run `setup-firebase.sh` or any deployment scripts in CI/CD, authenticate using a **Google Cloud Service Account JSON Key**:
+1. Point the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to your Service Account JSON key file:
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+   ```
+2. Activate the service account with the `gcloud` CLI:
+   ```bash
+   gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+   gcloud config set project "your-gcp-project-id"
+   ```
+3. When running `setup-firebase.sh`, the script automatically fetches the access token from your active service account credentials. Furthermore, since Firestore security rules are deployed natively via standard Google REST APIs (using `curl` and the active `gcloud` identity), this completely avoids requiring a deprecated `FIREBASE_TOKEN` or any browser-based interactive Firebase logins!
+
+### 2. Cloud Build GCS Permissions
+During container compilation, Cloud Build uploads source files as a tarball to a Google Cloud Storage bucket (`gs://[PROJECT_ID]_cloudbuild`) and extracts them. 
+
+In newly provisioned or highly restricted Google Cloud projects, the default Compute Engine service account (`[PROJECT_NUMBER]-compute@developer.gserviceaccount.com`) might lack permission to read or write to Cloud Storage buckets, causing Cloud Build to fail.
+
+#### Diagnostic and Verification
+Our deployment scripts (`deploy-student.sh` and `deploy-teacher.sh`) automatically perform a proactive IAM check to verify if the default Compute service account has proper Storage access (`roles/storage.admin` or `roles/editor`).
+
+#### Resolution
+If the permissions check fails or Cloud Build reports a bucket access error, grant the **Storage Admin** role to the default Compute service account:
+
+```bash
+# Retrieve your project number
+PROJECT_NUMBER=$(gcloud projects describe "YOUR_PROJECT_ID" --format="value(projectNumber)")
+
+# Grant Storage Admin permissions
+gcloud projects add-iam-policy-binding "YOUR_PROJECT_ID" \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/storage.admin"
+```
+
 ---
 
 ## 📄 License
