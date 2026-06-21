@@ -25,6 +25,7 @@ fi
 # Parse GCP configs from env file if present
 GCP_PROJECT_ID=""
 GCP_REGION=""
+VITE_FIRESTORE_DATABASE_ID=""
 
 if [ -n "$ENV_FILE" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
@@ -36,9 +37,13 @@ if [ -n "$ENV_FILE" ]; then
             GCP_PROJECT_ID=$(echo "$line" | cut -d'=' -f2- | xargs | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
         elif [[ "$line" =~ ^GCP_REGION= ]]; then
             GCP_REGION=$(echo "$line" | cut -d'=' -f2- | xargs | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+        elif [[ "$line" =~ ^VITE_FIRESTORE_DATABASE_ID= ]]; then
+            VITE_FIRESTORE_DATABASE_ID=$(echo "$line" | cut -d'=' -f2- | xargs | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
         fi
     done < "$ENV_FILE"
 fi
+
+FIRESTORE_DATABASE_ID="${VITE_FIRESTORE_DATABASE_ID:-opengoo}"
 
 if [ -z "$GCP_PROJECT_ID" ]; then
     echo -e "${RED}Error: GCP_PROJECT_ID is not defined in your environment or .env file.${NC}"
@@ -57,8 +62,9 @@ REGION="$GCP_REGION"
 APP_NICKNAME="opengoo-web-app"
 RULES_FILE="firestore.rules"
 
-echo -e "Project ID: ${GREEN}${PROJECT_ID}${NC}"
-echo -e "Region:     ${GREEN}${REGION}${NC}"
+echo -e "Project ID:  ${GREEN}${PROJECT_ID}${NC}"
+echo -e "Region:      ${GREEN}${REGION}${NC}"
+echo -e "Database ID: ${GREEN}${FIRESTORE_DATABASE_ID}${NC}"
 
 # 1. Check if gcloud is installed
 if ! command -v gcloud &> /dev/null; then
@@ -108,12 +114,16 @@ fi
 
 # 5. Auto-Initialize the Firestore Instance
 echo -e "\n${YELLOW}2. Checking and auto-initializing Firestore instance...${NC}"
-if ! gcloud firestore databases list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null | grep -q "(default)"; then
-    echo "Creating default Firestore database in Native mode..."
-    gcloud firestore databases create --location="$REGION" --project="$PROJECT_ID" --type=firestore-native
-    echo -e "${GREEN}✓ Firestore default database created successfully!${NC}"
+if ! gcloud firestore databases list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null | grep -q "databases/${FIRESTORE_DATABASE_ID}$"; then
+    echo "Creating Firestore database '${FIRESTORE_DATABASE_ID}' in Native mode..."
+    if [ "${FIRESTORE_DATABASE_ID}" = "(default)" ]; then
+        gcloud firestore databases create --location="$REGION" --project="$PROJECT_ID" --type=firestore-native
+    else
+        gcloud firestore databases create --database="${FIRESTORE_DATABASE_ID}" --location="$REGION" --project="$PROJECT_ID" --type=firestore-native
+    fi
+    echo -e "${GREEN}✓ Firestore database '${FIRESTORE_DATABASE_ID}' created successfully!${NC}"
 else
-    echo -e "${GREEN}✓ Firestore default database already exists.${NC}"
+    echo -e "${GREEN}✓ Firestore database '${FIRESTORE_DATABASE_ID}' already exists.${NC}"
 fi
 
 # 6. Check if Firebase is active on the project
@@ -190,6 +200,7 @@ VITE_FIREBASE_PROJECT_ID=$PROJECT_ID
 VITE_FIREBASE_STORAGE_BUCKET=$STORAGE_BUCKET
 VITE_FIREBASE_MESSAGING_SENDER_ID=$MESSAGING_SENDER_ID
 VITE_FIREBASE_APP_ID=$APP_ID_VAL
+VITE_FIRESTORE_DATABASE_ID=$FIRESTORE_DATABASE_ID
 EOF
 echo -e "${GREEN}✓ Local .env configuration updated successfully!${NC}"
 
@@ -219,8 +230,12 @@ if [ -f "$RULES_FILE" ]; then
     rm -f payload.json
 
     # 3. Release ruleset
-    echo "Releasing ruleset for Cloud Firestore..."
-    RELEASE_NAME="projects/${PROJECT_ID}/releases/cloud.firestore"
+    echo "Releasing ruleset for Cloud Firestore database '${FIRESTORE_DATABASE_ID}'..."
+    if [ "${FIRESTORE_DATABASE_ID}" = "(default)" ]; then
+        RELEASE_NAME="projects/${PROJECT_ID}/releases/cloud.firestore"
+    else
+        RELEASE_NAME="projects/${PROJECT_ID}/releases/cloud.firestore/${FIRESTORE_DATABASE_ID}"
+    fi
     
     # Try to PATCH first (updates an existing release)
     PATCH_RESPONSE=$(curl -s -X PATCH \

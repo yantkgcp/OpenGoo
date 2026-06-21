@@ -20,8 +20,14 @@ let dbFirestore;
 if (isFirebaseConfigured) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    dbFirestore = getFirestore(app);
-    console.log("🔥 Firebase initialized successfully on project:", firebaseConfig.projectId);
+    const databaseId = import.meta.env.VITE_FIRESTORE_DATABASE_ID;
+    if (databaseId && databaseId !== "(default)") {
+      dbFirestore = getFirestore(app, databaseId);
+      console.log(`🔥 Firebase initialized successfully on project: ${firebaseConfig.projectId} (database: ${databaseId})`);
+    } else {
+      dbFirestore = getFirestore(app);
+      console.log("🔥 Firebase initialized successfully on project:", firebaseConfig.projectId);
+    }
   } catch (error) {
     console.error("❌ Failed to initialize Firebase:", error);
   }
