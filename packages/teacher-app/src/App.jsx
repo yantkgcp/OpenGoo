@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import QuizCreator from './components/QuizCreator';
 import QuizHost from './components/QuizHost';
 import { db, defaultQuizzes, audioSynth, isFirebaseConfigured, dbFirestore } from '@opengoo/core';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, query, where, or } from 'firebase/firestore';
+import { getActiveUser, setLocalUser } from './services/authService';
 import { 
   Sparkles, 
   GraduationCap, 
@@ -11,15 +12,47 @@ import {
   Layers
 } from 'lucide-react';
 
+
 export default function App() {
   const [view, setView] = useState('home'); // 'home' | 'creator' | 'host'
   const [selectedQuizId, setSelectedQuizId] = useState('');
-  const [quizzes, setQuizzes] = useState(() => db.getQuizzes());
+  const [quizzes, setQuizzes] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    if (!isFirebaseConfigured || !dbFirestore) return;
+    getActiveUser().then(user => {
+      setCurrentUser(user);
+    });
+  }, []);
 
-    const unsubscribe = onSnapshot(collection(dbFirestore, 'quizzes'), (snapshot) => {
+  useEffect(() => {
+    if (!currentUser) return;
+
+    if (!isFirebaseConfigured || !dbFirestore) {
+      // Offline/Local Storage Fallback
+      const allLocal = db.getQuizzes();
+      const filteredLocal = allLocal.filter(quiz => 
+        quiz.isSystemDefault || 
+        quiz.creator === currentUser.email || 
+        (quiz.creator === 'teacher@opengoo.local' && currentUser.email === 'teacher@opengoo.local') || // Treat unassigned quizzes as teacher@opengoo.local
+        quiz.sharedWith?.includes(currentUser.email)
+      );
+      setQuizzes(filteredLocal);
+      return;
+    }
+
+    // Secure custom subscription for multi-user isolation on Firestore
+    const quizzesCollection = collection(dbFirestore, 'quizzes');
+    const q = query(
+      quizzesCollection,
+      or(
+        where('creator', '==', currentUser.email),
+        where('sharedWith', 'array-contains', currentUser.email),
+        where('isSystemDefault', '==', true)
+      )
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       let firebaseQuizzes = [];
       snapshot.forEach((doc) => {
         firebaseQuizzes.push(doc.data());
@@ -33,6 +66,10 @@ export default function App() {
           if (local.length > 0) {
             local.forEach((quiz) => {
               const cleanQuiz = JSON.parse(JSON.stringify(quiz));
+              // Ensure we stamp the creator on any seeded quiz if missing
+              if (!cleanQuiz.creator) {
+                cleanQuiz.creator = currentUser.email;
+              }
               setDoc(doc(dbFirestore, 'quizzes', quiz.id), cleanQuiz).catch((err) => {
                 console.error("Failed to seed quiz to Firestore:", err);
               });
@@ -54,7 +91,8 @@ export default function App() {
           if (!exists) {
             const cleanQuiz = JSON.parse(JSON.stringify(defaultQuiz));
             setDoc(doc(dbFirestore, 'quizzes', defaultQuiz.id), cleanQuiz).catch((err) => {
-              console.error(`Failed to seed missing default quiz ${defaultQuiz.id} to Firestore:`, err);
+              // We expect this to fail with 403 on client side due to creator == 'system' rule, which is fine
+              console.debug(`Failed to seed missing default quiz ${defaultQuiz.id} to Firestore (expected if read-only):`, err);
             });
             firebaseQuizzes.push(defaultQuiz);
           }
@@ -71,7 +109,9 @@ export default function App() {
             if (!isDefault) {
               const createdTime = new Date(localQuiz.created || 0).getTime();
               if (now - createdTime < 20000) {
-                firebaseQuizzes.push(localQuiz);
+                if (localQuiz.creator === currentUser.email) {
+                  firebaseQuizzes.push(localQuiz);
+                }
               }
             }
           }
@@ -87,7 +127,30 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
+
+  const handleSetQuizzes = (allQuizzes) => {
+    if (!currentUser) return;
+    if (!isFirebaseConfigured || !dbFirestore) {
+      const filtered = allQuizzes.filter(quiz => 
+        quiz.isSystemDefault || 
+        quiz.creator === currentUser.email || 
+        (quiz.creator === 'teacher@opengoo.local' && currentUser.email === 'teacher@opengoo.local') ||
+        quiz.sharedWith?.includes(currentUser.email)
+      );
+      setQuizzes(filtered);
+    } else {
+      setQuizzes(allQuizzes);
+    }
+  };
+
+  const handleSwitchProfile = (email) => {
+    audioSynth.playClick();
+    const name = email.split('@')[0];
+    const updatedUser = { email, name, isIAP: false };
+    setLocalUser(updatedUser);
+    setCurrentUser(updatedUser);
+  };
 
   const navigateTo = (newView, quizId = '') => {
     audioSynth.playClick();
@@ -96,7 +159,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       
       {/* Background Glows */}
       <div className="ambient-glows">
@@ -104,6 +167,64 @@ export default function App() {
         <div className="glow-bubble glow-bubble-2"></div>
         <div className="glow-bubble glow-bubble-3"></div>
       </div>
+
+      {/* User Indicator / Profile Switcher */}
+      {currentUser && view !== 'host' && (
+        <div style={{
+          position: 'absolute',
+          top: '1.5rem',
+          right: '1.5rem',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '0.5rem 1rem',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
+          transition: 'all 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.1rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white' }}>
+              {currentUser.name}
+            </span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              {currentUser.email}
+            </span>
+          </div>
+          
+          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }}></div>
+
+          {!currentUser.isIAP ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--accent-purple)', background: 'rgba(138,43,226,0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px', letterSpacing: '0.05em' }}>DEV</span>
+              <select 
+                value={currentUser.email} 
+                onChange={(e) => handleSwitchProfile(e.target.value)}
+                style={{ 
+                  background: 'rgba(0, 0, 0, 0.4)', 
+                  border: '1px solid rgba(255, 255, 255, 0.1)', 
+                  color: 'white', 
+                  fontSize: '0.8rem', 
+                  fontWeight: 600, 
+                  padding: '0.2rem 0.5rem', 
+                  borderRadius: '8px', 
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                <option value="teacher@opengoo.local" style={{ background: 'var(--bg-dark)' }}>Teacher Account</option>
+                <option value="colleague@opengoo.local" style={{ background: 'var(--bg-dark)' }}>Colleague Account</option>
+              </select>
+            </div>
+          ) : (
+            <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--accent-purple)', background: 'rgba(138,43,226,0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px', letterSpacing: '0.05em' }}>IAP SECURED</span>
+          )}
+        </div>
+      )}
 
       {/* Main Hub Router */}
       {view === 'home' && (
@@ -181,7 +302,7 @@ export default function App() {
       {/* VIEW: CREATOR PANEL */}
       {view === 'creator' && (
         <div style={{ padding: '2rem 1.5rem', width: '100%' }}>
-          <QuizCreator quizzes={quizzes} setQuizzes={setQuizzes} onBack={() => navigateTo('home')} onHost={(quizId) => navigateTo('host', quizId)} />
+          <QuizCreator quizzes={quizzes} setQuizzes={handleSetQuizzes} onBack={() => navigateTo('home')} onHost={(quizId) => navigateTo('host', quizId)} currentUser={currentUser} />
         </div>
       )}
 
@@ -195,3 +316,4 @@ export default function App() {
     </div>
   );
 }
+

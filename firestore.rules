@@ -5,7 +5,20 @@ service cloud.firestore {
     
     // Match any document in the quizzes collection (saved quiz sets)
     match /quizzes/{quizId} {
-      allow read, write: if true;
+      // READ ACCESS: Allow if system default, OR current user is the creator, OR current user is in sharedWith
+      allow read: if resource.data.isSystemDefault == true || 
+                   resource.data.creator == request.auth.token.email || 
+                   request.auth.token.email in resource.data.sharedWith;
+      
+      // CREATE ACCESS: Allow if setting themselves as creator
+      allow create: if request.resource.data.creator == request.auth.token.email;
+      
+      // UPDATE ACCESS: Only the original creator can edit fields (such as quiz content or sharedWith list)
+      allow update: if resource.data.creator == request.auth.token.email && 
+                     request.resource.data.creator == request.auth.token.email;
+                     
+      // DELETE ACCESS: Only the original creator can delete
+      allow delete: if resource.data.creator == request.auth.token.email;
     }
     
     // Match any document in the sessions collection (active game rooms)

@@ -12,10 +12,40 @@ import {
   HelpCircle
 } from 'lucide-react';
 
-export default function QuizCreator({ quizzes = [], setQuizzes, onBack, onHost }) {
+export default function QuizCreator({ quizzes = [], setQuizzes, onBack, onHost, currentUser }) {
   const [editingQuiz, setEditingQuiz] = useState(null);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [validationError, setValidationError] = useState('');
+  const [sharingQuiz, setSharingQuiz] = useState(null);
+
+  const handleSaveShare = (collaborators) => {
+    const updated = { ...sharingQuiz, sharedWith: collaborators };
+    db.saveQuiz(updated);
+    if (setQuizzes) {
+      setQuizzes(db.getQuizzes());
+    }
+    setSharingQuiz(null);
+  };
+
+  const handleCloneQuiz = (originalQuiz, e) => {
+    if (e) e.stopPropagation();
+    audioSynth.playClick();
+    const cloned = {
+      ...JSON.parse(JSON.stringify(originalQuiz)), // Deep copy questions
+      id: 'quiz_' + Math.random().toString(36).substr(2, 9),
+      title: `📋 Copy of ${originalQuiz.title}`,
+      creator: currentUser?.email || 'teacher@opengoo.local', // Set current user as owner
+      sharedWith: [], // Clear any sharing configuration for the clone
+      isSystemDefault: false,
+      created: new Date().toISOString()
+    };
+    
+    db.saveQuiz(cloned);
+    if (setQuizzes) {
+      setQuizzes(db.getQuizzes());
+    }
+    alert(`Successfully cloned "${originalQuiz.title}" to your library! You can now edit it.`);
+  };
 
   // Save the full quiz to db
   const handleSaveQuiz = () => {
@@ -69,6 +99,9 @@ export default function QuizCreator({ quizzes = [], setQuizzes, onBack, onHost }
       id: 'quiz_' + Math.random().toString(36).substr(2, 9),
       title: 'New Fun Trivia Quiz',
       description: 'Test your friends with this awesome trivia!',
+      creator: currentUser?.email || 'teacher@opengoo.local',
+      sharedWith: [],
+      isSystemDefault: false,
       questions: [
         {
           id: 'q_' + Math.random().toString(36).substr(2, 9),
@@ -388,6 +421,12 @@ export default function QuizCreator({ quizzes = [], setQuizzes, onBack, onHost }
     );
   }
 
+  const userEmail = currentUser?.email || 'teacher@opengoo.local';
+  
+  const myQuizzes = quizzes.filter(q => (q.creator === userEmail || (!q.creator && userEmail === 'teacher@opengoo.local')) && !q.isSystemDefault);
+  const sharedQuizzes = quizzes.filter(q => q.sharedWith?.includes(userEmail) && q.creator !== userEmail);
+  const systemQuizzes = quizzes.filter(q => q.isSystemDefault);
+
   return (
     <div className="anim-slide-up" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
       
@@ -398,8 +437,8 @@ export default function QuizCreator({ quizzes = [], setQuizzes, onBack, onHost }
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', background: 'linear-gradient(90deg, #fff, var(--text-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>My Saved Quizzes</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Create, host, and manage multiple choice games for your students.</p>
+            <h1 style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', background: 'linear-gradient(90deg, #fff, var(--text-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Saved Quiz Hub</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Create, share, duplicate and host live competition boards.</p>
           </div>
         </div>
         <button className="btn-primary" onClick={handleCreateNewQuiz}>
@@ -407,69 +446,245 @@ export default function QuizCreator({ quizzes = [], setQuizzes, onBack, onHost }
         </button>
       </div>
 
-      {/* Quizzes List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {quizzes.map((quiz) => (
-          <div 
-            key={quiz.id} 
-            className="glass-panel glass-panel-hover" 
-            style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}
-            onClick={() => { audioSynth.playClick(); setEditingQuiz(quiz); }}
-          >
-            <div style={{ flexGrow: 1, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                <h3 style={{ fontSize: '1.3rem', fontFamily: 'var(--font-heading)', color: 'white' }}>{quiz.title}</h3>
-                <span style={{ background: 'rgba(138,43,226,0.15)', color: 'var(--accent-purple)', fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '10px', fontWeight: 700 }}>
-                  {quiz.questions.length} {quiz.questions.length === 1 ? 'question' : 'questions'}
-                </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        
+        {/* Section 1: My Quizzes */}
+        <div>
+          <h2 style={{ fontSize: '1.25rem', color: 'white', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            📁 My Library <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>({myQuizzes.length})</span>
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {myQuizzes.map((quiz) => (
+              <div 
+                key={quiz.id} 
+                className="glass-panel glass-panel-hover" 
+                style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}
+                onClick={() => { audioSynth.playClick(); setEditingQuiz(quiz); }}
+              >
+                <div style={{ flexGrow: 1, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                    <h3 style={{ fontSize: '1.15rem', fontFamily: 'var(--font-heading)', color: 'white' }}>{quiz.title}</h3>
+                    <span style={{ background: 'rgba(138,43,226,0.15)', color: 'var(--accent-purple)', fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '8px', fontWeight: 700 }}>
+                      {quiz.questions.length} Qs
+                    </span>
+                  </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: '1', WebkitBoxOrient: 'vertical' }}>
+                    {quiz.description}
+                  </p>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  {onHost && (
+                    <button 
+                      className="btn-primary" 
+                      onClick={() => { audioSynth.playClick(); onHost(quiz.id); }}
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', boxShadow: 'none', height: '32px' }}
+                    >
+                      Host
+                    </button>
+                  )}
+                  <button 
+                    className="btn-secondary" 
+                    onClick={() => { audioSynth.playClick(); setEditingQuiz(quiz); }}
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', height: '32px' }}
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    className="btn-secondary" 
+                    onClick={() => { audioSynth.playClick(); setSharingQuiz(quiz); }}
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', height: '32px', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                  >
+                    🔗 Share
+                  </button>
+                  <button 
+                    className="btn-secondary" 
+                    onClick={(e) => handleDeleteQuiz(quiz.id, e)}
+                    style={{ padding: '0.4rem', color: 'var(--kahoot-red)', borderColor: 'rgba(239, 68, 68, 0.15)', height: '32px', width: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' }}>
-                {quiz.description}
-              </p>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-              {onHost && (
-                <button 
-                  className="btn-primary" 
-                  onClick={(e) => { e.stopPropagation(); audioSynth.playClick(); onHost(quiz.id); }}
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', boxShadow: 'none' }}
-                >
-                  Host
-                </button>
-              )}
-              <button 
-                className="btn-secondary" 
-                onClick={(e) => { e.stopPropagation(); audioSynth.playClick(); setEditingQuiz(quiz); }}
-                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-              >
-                Edit
-              </button>
-              <button 
-                className="btn-secondary" 
-                onClick={(e) => handleDeleteQuiz(quiz.id, e)}
-                style={{ padding: '0.5rem', color: 'var(--kahoot-red)', borderColor: 'rgba(239, 68, 68, 0.15)' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+            ))}
+            {myQuizzes.length === 0 && (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontStyle: 'italic', padding: '1rem', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '10px', textAlign: 'center' }}>No custom quizzes created yet.</p>
+            )}
           </div>
-        ))}
+        </div>
 
-        {quizzes.length === 0 && (
-          <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-            <HelpCircle size={48} style={{ color: 'var(--text-muted)' }} />
-            <div>
-              <h3 style={{ fontSize: '1.2rem', color: 'white' }}>No quizzes yet</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>Get started by creating your very first trivia game!</p>
+        {/* Section 2: Shared with Me */}
+        {sharedQuizzes.length > 0 && (
+          <div>
+            <h2 style={{ fontSize: '1.25rem', color: 'white', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🤝 Shared with Me <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>({sharedQuizzes.length})</span>
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {sharedQuizzes.map((quiz) => (
+                <div 
+                  key={quiz.id} 
+                  className="glass-panel" 
+                  style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}
+                >
+                  <div style={{ flexGrow: 1, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '1.15rem', fontFamily: 'var(--font-heading)', color: 'white' }}>{quiz.title}</h3>
+                      <span style={{ background: 'rgba(138,43,226,0.15)', color: 'var(--accent-purple)', fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '8px', fontWeight: 700 }}>
+                        {quiz.questions.length} Qs
+                      </span>
+                      <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '8px' }}>
+                        👤 Creator: {quiz.creator}
+                      </span>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: '1', WebkitBoxOrient: 'vertical' }}>
+                      {quiz.description}
+                    </p>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                    {onHost && (
+                      <button 
+                        className="btn-primary" 
+                        onClick={() => { audioSynth.playClick(); onHost(quiz.id); }}
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', boxShadow: 'none', height: '32px' }}
+                      >
+                        Host
+                      </button>
+                    )}
+                    <button 
+                      className="btn-secondary" 
+                      onClick={(e) => handleCloneQuiz(quiz, e)}
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', height: '32px' }}
+                    >
+                      Duplicate to Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <button className="btn-primary" onClick={handleCreateNewQuiz} style={{ marginTop: '0.5rem' }}>
-              Create Quiz
-            </button>
           </div>
         )}
+
+        {/* Section 3: Curriculum Defaults */}
+        <div>
+          <h2 style={{ fontSize: '1.25rem', color: 'white', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            🏆 Official Curriculum <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>({systemQuizzes.length})</span>
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {systemQuizzes.map((quiz) => (
+              <div 
+                key={quiz.id} 
+                className="glass-panel" 
+                style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}
+              >
+                <div style={{ flexGrow: 1, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                    <h3 style={{ fontSize: '1.15rem', fontFamily: 'var(--font-heading)', color: 'white' }}>{quiz.title}</h3>
+                    <span style={{ background: 'rgba(138,43,226,0.15)', color: 'var(--accent-purple)', fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '8px', fontWeight: 700 }}>
+                      {quiz.questions.length} Qs
+                    </span>
+                  </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: '1', WebkitBoxOrient: 'vertical' }}>
+                    {quiz.description}
+                  </p>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                  {onHost && (
+                    <button 
+                      className="btn-primary" 
+                      onClick={() => { audioSynth.playClick(); onHost(quiz.id); }}
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', boxShadow: 'none', height: '32px' }}
+                    >
+                      Host
+                    </button>
+                  )}
+                  <button 
+                    className="btn-secondary" 
+                    onClick={(e) => handleCloneQuiz(quiz, e)}
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', height: '32px' }}
+                  >
+                    Duplicate to Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Share Modal overlay */}
+      {sharingQuiz && (
+        <ShareModal 
+          quiz={sharingQuiz} 
+          onClose={() => setSharingQuiz(null)} 
+          onSave={handleSaveShare} 
+        />
+      )}
+    </div>
+  );
+}
+
+// Share Modal Component
+function ShareModal({ quiz, onClose, onSave }) {
+  const [newEmail, setNewEmail] = useState('');
+  const [collaborators, setCollaborators] = useState(quiz.sharedWith || []);
+
+  const handleAdd = () => {
+    const emailTrimmed = newEmail.trim().toLowerCase();
+    if (emailTrimmed && !collaborators.includes(emailTrimmed)) {
+      const updated = [...collaborators, emailTrimmed];
+      setCollaborators(updated);
+      setNewEmail('');
+    }
+  };
+
+  const handleRemove = (email) => {
+    const updated = collaborators.filter(e => e !== email);
+    setCollaborators(updated);
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
+      <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', border: '1px solid rgba(138,43,226,0.3)' }} onClick={(e) => e.stopPropagation()}>
+        <div>
+          <h3 style={{ fontSize: '1.4rem', color: 'white', marginBottom: '0.25rem' }}>🔗 Share Quiz</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Grant colleagues permission to host and duplicate "{quiz.title}".</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input 
+            type="email" 
+            placeholder="colleague@school.edu" 
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', outline: 'none' }}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          />
+          <button className="btn-primary" onClick={handleAdd} style={{ padding: '0 1.25rem', height: '42px' }}>Add</button>
+        </div>
+
+        <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT COLLABORATORS</span>
+          {collaborators.length === 0 ? (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Not shared with anyone yet.</p>
+          ) : (
+            collaborators.map(email => (
+              <div key={email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px' }}>
+                <span style={{ fontSize: '0.85rem', color: 'white' }}>{email}</span>
+                <button onClick={() => handleRemove(email)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontSize: '0.8rem' }}>Remove</button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+          <button className="btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+          <button className="btn-primary" onClick={() => onSave(collaborators)} style={{ flex: 1 }}>Save Access</button>
+        </div>
       </div>
     </div>
   );

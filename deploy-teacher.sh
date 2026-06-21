@@ -166,6 +166,22 @@ gcloud run services update "${SERVICE_NAME}" \
     --region "${REGION}" \
     --iap
 
+# 8.5 Auto-provision IAM permissions for Custom Token Minting
+echo -e "\n${YELLOW}Auto-provisioning IAM permissions for Firebase token generation...${NC}"
+if [ -n "$PROJECT_NUMBER" ]; then
+    COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+    echo -e "Granting ${BLUE}roles/iam.serviceAccountTokenCreator${NC} to ${GREEN}${COMPUTE_SA}${NC}..."
+    
+    gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+        --member="serviceAccount:${COMPUTE_SA}" \
+        --role="roles/iam.serviceAccountTokenCreator" >/dev/null && \
+        echo -e "${GREEN}✓ IAM Token Creator role provisioned successfully!${NC}" || \
+        echo -e "${RED}⚠️ Warning: Failed to auto-bind Token Creator role. Please run manually if token minting fails.${NC}"
+
+else
+    echo -e "${RED}⚠️ Warning: Could not detect project number. Skip provisioning token creator permissions.${NC}"
+fi
+
 # 9. Retrieve Service URL
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --platform managed --region "${REGION}" --format 'value(status.url)' 2>/dev/null || true)
 

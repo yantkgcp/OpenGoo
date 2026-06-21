@@ -32,21 +32,23 @@ COPY packages/teacher-app ./packages/teacher-app
 # Build the teacher application
 RUN npm run build:teacher
 
-# Stage 2: Serve the app with Nginx
-FROM nginx:stable-alpine
-
-# Set default port environment variable (Cloud Run defaults to 8080)
+# Stage 2: Serve the app with Node.js Express server (Identity Bridge)
+FROM node:20-alpine
+WORKDIR /app
 ENV PORT=8080
-ENV NGINX_ENVSUBST_FILTER=PORT
 
-# Copy the built SPA files to Nginx public folder
-COPY --from=builder /app/packages/teacher-app/dist /usr/share/nginx/html
+# Create minimal package.json to specify type module
+RUN echo '{"type":"module"}' > package.json
 
-# Copy Nginx template configuration for dynamic port substitution on Cloud Run
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+# Install server production-dependencies
+RUN npm install express@4 firebase-admin
 
-# Expose port 8080
+
+
+
+# Copy compiled static SPA files and server code
+COPY --from=builder /app/packages/teacher-app/dist ./dist
+COPY packages/teacher-app/server.js ./server.js
+
 EXPOSE 8080
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "server.js"]

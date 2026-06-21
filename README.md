@@ -115,9 +115,44 @@ The monorepo structure and descriptions of key files are organized as follows:
 ## Capabilities & Key Features
 
 *   **Anytime, Anywhere Quiz Competitions:** Empower hosts and teachers to dynamically create, manage, and host live quiz competitions anytime and from anywhere, enabling guest players and students to seamlessly connect and participate in real-time.
+*   **Multi-User Isolation & Collaborative Sharing:** Isolates custom quizzes by their respective creator accounts under the private Teacher Hub. Teachers can securely share their quiz sets with other specific teachers. Shared quizzes are read-and-host only for recipients, allowing colleagues to host them directly or duplicate them into their own personal libraries for customization.
 *   **Grade 3-4 Math Champions Quiz:** Features a pre-baked 20-question math curriculum (addition, subtraction, multiplication, division, brackets) designed to auto-seed on the first launch of the Teacher Hub.
 *   **Web Audio Synth Synthesizers:** Provides dynamic sound effects synced to client events without requiring large asset downloads.
 *   **Secure Access-Gate:** Built-in integrated secure protection using Google Cloud Identity-Aware Proxy (IAP) directly on the Serverless Cloud Run endpoint.
+
+---
+
+## 🔒 Multi-User Isolation & Collaborative Sharing
+
+OpenGoo! is designed for collaborative educational environments, featuring secure tenant isolation and quiz sharing among teachers.
+
+### Architectural Workflow
+
+```mermaid
+graph TD
+    A[Teacher App /api/me] -->|1. Intercepts IAP Headers| B[Identify Email & Name]
+    B -->|2. Mint custom JWT token| C[Firebase Auth Client]
+    C -->|3. Query Firestore| D{Firestore Security Rules}
+    
+    D -->|Allow Read| E[System Default Quizzes]
+    D -->|Allow Read| F[Quizzes Created by User]
+    D -->|Allow Read| G[Quizzes Shared with User]
+    D -->|Allow Write/Update| F
+```
+
+1. **Identity & Secure Minting:** When a teacher accesses the Hub via Google Cloud Run, Google IAP handles authentication. The Node.js Express server (`server.js`) intercepts the authenticated email (`X-Goog-Authenticated-User-Email`) and securely mints a **Firebase Custom Auth Token** matching that identity.
+2. **Client-Side Authorization:** The single-page React app receives the custom token and logs into Firestore client-side.
+3. **Granular Security Rules:** Firestore security rules restrict operations on `/quizzes/{quizId}`:
+   - **Read:** Allowed if the quiz is marked `isSystemDefault`, or if `creator == request.auth.token.email`, or if `request.auth.token.email in sharedWith`.
+   - **Create / Delete / Update:** Restricted strictly to the owner (`creator == request.auth.token.email`).
+4. **Collaborative Scope (Read & Host Only):** If Teacher A shares a quiz with Teacher B, it appears under Teacher B's **"Shared with Me"** section. Teacher B can immediately host live lobbies of Teacher A's quiz, but cannot modify it directly. To customize, Teacher B can click **Duplicate to Edit** to clone the quiz as an independent copy owned by themselves.
+
+### Local Mocking & Switching (Dev Mode)
+
+To facilitate swift developer testing without requiring active GCP IAP instances, OpenGoo! provides a premium developer profile switcher when running locally:
+- **Mock Fallback:** Local developer environments gracefully fall back to local mocks (such as `teacher@opengoo.local` or `colleague@opengoo.local`).
+- **Profile Selector:** A glowing glassmorphic select dropdown is visible at the top-right corner of the Hub. Swapping profiles instantly updates the workspace view and filters local storage or Firestore items in real-time, matching exactly how isolated subscriptions behave in production.
+
 ---
 
 ## 🏆 Example Competition Flow

@@ -9,6 +9,8 @@ export const defaultQuizzes = [
     title: '🌐 Web Development Trivia',
     description: 'Test your knowledge on modern CSS, JS, browser APIs, and core web performance metrics!',
     created: '2026-05-20T12:00:00Z',
+    creator: 'system',
+    isSystemDefault: true,
     questions: [
       {
         id: 'q1',
@@ -82,6 +84,8 @@ export const defaultQuizzes = [
     title: '🚀 Space & Science Explorer',
     description: 'An exciting journey through physics, chemistry, and astronomical wonders of the cosmos!',
     created: '2026-05-20T12:05:00Z',
+    creator: 'system',
+    isSystemDefault: true,
     questions: [
       {
         id: 's1',
@@ -142,6 +146,8 @@ export const defaultQuizzes = [
     title: '🔬 Kids\' STEM Explorers! (Ages 7-10)',
     description: 'An exciting science, tech, engineering, and math adventure! Perfect for young innovators and curious minds.',
     created: '2026-06-19T12:00:00Z',
+    creator: 'system',
+    isSystemDefault: true,
     questions: [
       {
         id: 'stem1',
@@ -215,6 +221,8 @@ export const defaultQuizzes = [
     title: '🧮 Grade 3-4 Math Champions!',
     description: 'A 20-question challenge with addition, subtraction, multiplication, division, and brackets! Perfect for quick thinkers!',
     created: '2026-06-19T13:00:00Z',
+    creator: 'system',
+    isSystemDefault: true,
     questions: [
       {
         id: 'math1',

@@ -88,11 +88,23 @@ gcloud services enable \
     firestore.googleapis.com \
     firebaserules.googleapis.com \
     cloudresourcemanager.googleapis.com \
+    identitytoolkit.googleapis.com \
     --project="$PROJECT_ID"
 echo -e "${GREEN}✓ APIs enabled successfully!${NC}"
 
 # Get the access token for Firebase Management REST API calls
-ACCESS_TOKEN=$(gcloud auth print-access-token)
+# Corporate/restrictive dev environments might enforce Certificate Based Access (CBA) on the gcloud token,
+# which curl requests will reject. We try to use Application Default Credentials (ADC) as a fallback/preference.
+ACCESS_TOKEN=$(gcloud auth application-default print-access-token 2>/dev/null || true)
+if [ -z "$ACCESS_TOKEN" ]; then
+    ACCESS_TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
+fi
+
+if [ -z "$ACCESS_TOKEN" ]; then
+    echo -e "${RED}Error: Failed to obtain an access token. Please run 'gcloud auth login' or 'gcloud auth application-default login' first.${NC}"
+    exit 1
+fi
+
 
 # 5. Auto-Initialize the Firestore Instance
 echo -e "\n${YELLOW}2. Checking and auto-initializing Firestore instance...${NC}"
@@ -214,8 +226,9 @@ if [ -f "$RULES_FILE" ]; then
     PATCH_RESPONSE=$(curl -s -X PATCH \
       -H "Authorization: Bearer $ACCESS_TOKEN" \
       -H "Content-Type: application/json" \
-      -d "{\"rulesetName\": \"${RULESET_NAME}\"}" \
-      "https://firebaserules.googleapis.com/v1/${RELEASE_NAME}?updateMask=rulesetName")
+      -d "{\"release\": {\"name\": \"${RELEASE_NAME}\", \"rulesetName\": \"${RULESET_NAME}\"}, \"updateMask\": \"rulesetName\"}" \
+      "https://firebaserules.googleapis.com/v1/${RELEASE_NAME}")
+
 
     # If the response contains NOT_FOUND (indicating the release doesn't exist yet), we do a POST
     if echo "$PATCH_RESPONSE" | grep -q "NOT_FOUND"; then
