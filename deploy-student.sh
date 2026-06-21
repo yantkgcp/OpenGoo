@@ -160,6 +160,15 @@ gcloud run deploy "${SERVICE_NAME}" \
     --region "${REGION}" \
     --allow-unauthenticated
 
+# Explicitly ensure the service allows public unauthenticated access via IAM policy binding
+echo "Ensuring public access via IAM policy binding..."
+gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
+    --region="${REGION}" \
+    --project="${PROJECT_ID}" \
+    --member="allUsers" \
+    --role="roles/run.invoker" \
+    --quiet >/dev/null 2>&1 || true
+
 # 8. Retrieve Service URL
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --platform managed --region "${REGION}" --format 'value(status.url)' 2>/dev/null || true)
 
