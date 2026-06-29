@@ -77,10 +77,13 @@ export default function QuizPlayer({ onBack }) {
 
     setGameState('lobby');
 
-    // Connect to the host using unified GameSync API
     unsubscribeRef.current = GameSync.joinGame(pin.trim(), playerId, name.trim(), {
       onLobbyState: (title) => {
         setLobbyTitle(title);
+      },
+      onGetReady: (msg) => {
+        setGameState('get-ready');
+        setCurrentQuestion(msg);
       },
       onQuestionStart: (msg) => {
         setSelectedOptions([]);
@@ -257,6 +260,67 @@ export default function QuizPlayer({ onBack }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}>
             <Users size={16} />
             <span style={{ fontSize: '0.85rem' }}>Waiting for teacher to launch the game...</span>
+          </div>
+        </div>
+      )}
+
+      {/* 2.5. GET READY SCREEN */}
+      {gameState === 'get-ready' && (
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2rem', justifyContent: 'center', flexGrow: 1 }}>
+          <div className="glass-panel anim-pop-in" style={{ 
+            padding: '3rem 2rem', 
+            background: 'linear-gradient(135deg, rgba(138,43,226,0.15) 0%, rgba(255,255,255,0.02) 100%)', 
+            border: '1px solid hsla(265, 85%, 65%, 0.2)',
+            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+          }}>
+            <div className="pulse-fast" style={{ 
+              fontSize: '4.5rem', 
+              marginBottom: '1rem',
+              filter: 'drop-shadow(0 0 15px var(--accent-purple-glow))'
+            }}>
+              ⚡
+            </div>
+            
+            <h2 style={{ 
+              fontSize: '2.2rem', 
+              fontFamily: 'var(--font-heading)', 
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #ffffff 0%, #be9bf7 100%)', 
+              WebkitBackgroundClip: 'text', 
+              WebkitTextFillColor: 'transparent',
+              marginBottom: '0.5rem'
+            }}>
+              Get Ready!
+            </h2>
+            
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', fontWeight: 600 }}>
+              Question {currentQuestion ? currentQuestion.questionIdx + 1 : ''} is coming...
+            </p>
+
+            <div style={{ 
+              marginTop: '2rem',
+              height: '4px',
+              width: '100%',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '2px',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                height: '100%',
+                width: '100%',
+                background: 'linear-gradient(90deg, var(--accent-purple), var(--kahoot-blue))',
+                animation: 'loading-bar 4s linear infinite'
+              }} />
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}>
+            <Users size={16} />
+            <span style={{ fontSize: '0.85rem' }}>Look at the host screen!</span>
           </div>
         </div>
       )}

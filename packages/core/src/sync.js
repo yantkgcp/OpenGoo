@@ -169,6 +169,23 @@ export const GameSync = {
     }
   },
 
+  // Broadcast get-ready state (Host side)
+  broadcastGetReady: async (pin, qIdx) => {
+    if (isFirebaseConfigured) {
+      const sessionRef = doc(dbFirestore, 'sessions', pin);
+      await setDoc(sessionRef, {
+        phase: 'get-ready',
+        questionIdx: qIdx
+      }, { merge: true });
+    } else {
+      const channel = getChannel(pin);
+      channel.postMessage({
+        type: 'GET_READY',
+        questionIdx: qIdx
+      });
+    }
+  },
+
   // Broadcast question end/feedback (Host side)
   broadcastQuestionEnd: async (pin, qCorrectAnswers, playersWithFeedback) => {
     if (isFirebaseConfigured) {
@@ -264,7 +281,7 @@ export const GameSync = {
   // STUDENT / PLAYER CLIENT API
   // -----------------------------------------------------------
   joinGame: (pin, playerId, name, callbacks) => {
-    const { onLobbyState, onQuestionStart, onQuestionEnd, onGameOver, onInvalidPin, onError } = callbacks;
+    const { onLobbyState, onGetReady, onQuestionStart, onQuestionEnd, onGameOver, onInvalidPin, onError } = callbacks;
     let localJoined = false;
 
     if (isFirebaseConfigured) {
@@ -309,6 +326,16 @@ export const GameSync = {
         if (currentPhase === 'lobby') {
           onLobbyState(data.title, data.players || []);
           lastPhase = 'lobby';
+        } else if (currentPhase === 'get-ready') {
+          if (lastPhase !== 'get-ready' || data.questionIdx !== lastQuestionIdx) {
+            if (onGetReady) {
+              onGetReady({
+                questionIdx: data.questionIdx
+              });
+            }
+            lastPhase = 'get-ready';
+            lastQuestionIdx = data.questionIdx;
+          }
         } else if (currentPhase === 'question') {
           if (lastPhase !== 'question' || data.questionIdx !== lastQuestionIdx) {
             onQuestionStart({
@@ -324,7 +351,7 @@ export const GameSync = {
             lastQuestionIdx = data.questionIdx;
           }
         } else if (currentPhase === 'reveal') {
-          if (lastPhase !== 'reveal') {
+          if (lastPhase !== 'reveal' || data.questionIdx !== lastQuestionIdx) {
             // Find player score info in updated lobby list
             const pInfo = (data.players || []).find(p => p.id === playerId);
             if (pInfo) {
@@ -339,6 +366,7 @@ export const GameSync = {
               });
             }
             lastPhase = 'reveal';
+            lastQuestionIdx = data.questionIdx;
           }
         } else if (currentPhase === 'podium') {
           if (lastPhase !== 'podium') {
@@ -375,6 +403,10 @@ export const GameSync = {
           if (!localJoined) {
             localJoined = true;
             channel.postMessage({ type: 'JOIN_GAME', playerId, name });
+          }
+        } else if (msg.type === 'GET_READY') {
+          if (onGetReady) {
+            onGetReady(msg);
           }
         } else if (msg.type === 'QUESTION_START') {
           onQuestionStart(msg);

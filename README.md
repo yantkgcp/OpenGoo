@@ -119,6 +119,7 @@ The monorepo structure and descriptions of key files are organized as follows:
 *   **Grade 3-4 Math Champions Quiz:** Features a pre-baked 20-question math curriculum (addition, subtraction, multiplication, division, brackets) designed to auto-seed on the first launch of the Teacher Hub.
 *   **Web Audio Synth Synthesizers:** Provides dynamic sound effects synced to client events without requiring large asset downloads.
 *   **Secure Access-Gate:** Built-in integrated secure protection using Google Cloud Identity-Aware Proxy (IAP) directly on the Serverless Cloud Run endpoint.
+*   **Robust State-Based Synchronization:** Engineered with a state-based real-time replication model via Firestore snapshots (with automated BroadcastChannel backup for local dev) that synchronizes gameplay phases (Lobby, Get Ready, Question, Reveal, and Podium) across all clients with robust state-guarding to prevent connection lag or skipped question lockouts.
 
 ---
 

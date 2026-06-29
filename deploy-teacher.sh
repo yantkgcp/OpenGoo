@@ -166,6 +166,23 @@ gcloud run services update "${SERVICE_NAME}" \
     --region "${REGION}" \
     --iap
 
+# 8.2 Grant Cloud Run Invoker permission to IAP Service Agent
+if [ -n "$PROJECT_NUMBER" ]; then
+    IAP_SA="service-${PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com"
+    echo -e "Ensuring IAP Service Agent ${BLUE}${IAP_SA}${NC} exists..."
+    gcloud beta services identity create --service=iap.googleapis.com --project="${PROJECT_ID}" >/dev/null 2>&1 || true
+
+    echo -e "Granting ${BLUE}roles/run.invoker${NC} to IAP Service Agent on ${GREEN}${SERVICE_NAME}${NC}..."
+    gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
+        --region="${REGION}" \
+        --project="${PROJECT_ID}" \
+        --member="serviceAccount:${IAP_SA}" \
+        --role="roles/run.invoker" \
+        --quiet >/dev/null 2>&1 && \
+        echo -e "${GREEN}✓ IAP Service Agent granted Invoker permissions successfully!${NC}" || \
+        echo -e "${RED}⚠️ Warning: Failed to auto-bind IAP Invoker role. Please verify your permissions.${NC}"
+fi
+
 # 8.5 Auto-provision IAM permissions for Custom Token Minting
 echo -e "\n${YELLOW}Auto-provisioning IAM permissions for Firebase token generation...${NC}"
 if [ -n "$PROJECT_NUMBER" ]; then

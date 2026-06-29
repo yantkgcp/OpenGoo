@@ -341,6 +341,9 @@ export default function QuizHost({ quizId, onBack }) {
     questionIdxRef.current = 0;
     setReadyCountdown(4);
     
+    // Broadcast get-ready state to Firestore so student screens transition instantly
+    GameSync.broadcastGetReady(pin, 0);
+    
     getReadyIntervalRef.current = setInterval(() => {
       setReadyCountdown(prev => {
         if (prev <= 1) {
@@ -373,6 +376,9 @@ export default function QuizHost({ quizId, onBack }) {
       setPhase('get-ready');
       phaseRef.current = 'get-ready';
       setReadyCountdown(4);
+
+      // Broadcast get-ready state to Firestore so student screens transition instantly
+      GameSync.broadcastGetReady(pin, nextQIdx);
 
       getReadyIntervalRef.current = setInterval(() => {
         setReadyCountdown(prev => {
