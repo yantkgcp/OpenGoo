@@ -191,7 +191,8 @@ if [ -n "$PROJECT_NUMBER" ]; then
     
     gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
         --member="serviceAccount:${COMPUTE_SA}" \
-        --role="roles/iam.serviceAccountTokenCreator" >/dev/null && \
+        --role="roles/iam.serviceAccountTokenCreator" \
+        --condition=None >/dev/null && \
         echo -e "${GREEN}✓ IAM Token Creator role provisioned successfully!${NC}" || \
         echo -e "${RED}⚠️ Warning: Failed to auto-bind Token Creator role. Please run manually if token minting fails.${NC}"
 

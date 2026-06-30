@@ -60,7 +60,7 @@ export default function App() {
 
       if (firebaseQuizzes.length === 0) {
         // Only seed if we haven't seeded yet (to allow user to delete all quizzes)
-        const alreadySeeded = localStorage.getItem('kahoot_quizzes_cloud_seeded') === 'true';
+        const alreadySeeded = localStorage.getItem('opengooapp_quizzes_cloud_seeded') === 'true';
         if (!alreadySeeded) {
           const local = db.getQuizzes();
           if (local.length > 0) {
@@ -74,7 +74,7 @@ export default function App() {
                 console.error("Failed to seed quiz to Firestore:", err);
               });
             });
-            localStorage.setItem('kahoot_quizzes_cloud_seeded', 'true');
+            localStorage.setItem('opengooapp_quizzes_cloud_seeded', 'true');
             setQuizzes(local);
           }
         } else {
@@ -89,11 +89,6 @@ export default function App() {
         defaultQuizzes.forEach((defaultQuiz) => {
           const exists = firebaseQuizzes.some((q) => q.id === defaultQuiz.id);
           if (!exists) {
-            const cleanQuiz = JSON.parse(JSON.stringify(defaultQuiz));
-            setDoc(doc(dbFirestore, 'quizzes', defaultQuiz.id), cleanQuiz).catch((err) => {
-              // We expect this to fail with 403 on client side due to creator == 'system' rule, which is fine
-              console.debug(`Failed to seed missing default quiz ${defaultQuiz.id} to Firestore (expected if read-only):`, err);
-            });
             firebaseQuizzes.push(defaultQuiz);
           }
         });
@@ -119,7 +114,7 @@ export default function App() {
 
         // Save the consolidated list to local storage and update app state
         db.saveQuizzes(firebaseQuizzes);
-        localStorage.setItem('kahoot_quizzes_cloud_seeded', 'true');
+        localStorage.setItem('opengooapp_quizzes_cloud_seeded', 'true');
         setQuizzes(firebaseQuizzes);
       }
     }, (error) => {
